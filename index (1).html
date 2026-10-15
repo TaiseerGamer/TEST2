@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sphere Roll — 3D Maze</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <header><div><div class="eyebrow">3D PHYSICS CHALLENGE</div><h1>SPHERE <span>ROLL</span></h1><p>Rotate the spherical maze. Guide the ball through every obstacle and escape!</p></div>
+  <div class="top-stats"><div><small>LEVEL</small><b id="levelNum">01</b></div><div><small>TIME</small><b id="timer">00:00</b></div><div><small>FALLS</small><b id="falls">0</b></div></div></header>
+  <main>
+    <section class="game-panel">
+      <div class="canvas-wrap"><div id="loading">Building your maze…</div><div class="canvas-label">SPHERICAL MAZE <span id="difficultyBadge">NORMAL</span></div><div class="help-chip">WASD / ARROWS to tilt · Space to reset</div><div id="toast"></div><div id="overlay" class="overlay"><div class="overlay-card"><div class="win-icon">✦</div><h2 id="overlayTitle">Maze escaped!</h2><p id="overlayText">Great rolling! Ready for the next challenge?</p><button id="nextBtn">NEXT LEVEL →</button></div></div></div>
+      <div class="controls">
+        <div class="dpad"><button data-dir="up" aria-label="Tilt up">▲</button><div><button data-dir="left" aria-label="Tilt left">◀</button><button id="resetBtn" class="reset" aria-label="Reset ball">↺</button><button data-dir="right" aria-label="Tilt right">▶</button></div><button data-dir="down" aria-label="Tilt down">▼</button></div>
+        <div class="control-copy"><b>Control the sphere</b><p>Hold the buttons to tilt the maze. Use gentle movements around the rings, and line up with the glowing exit.</p><div class="legend"><span><i class="dot ball-dot"></i> Your ball</span><span><i class="dot wall-dot"></i> Barriers</span><span><i class="dot goal-dot"></i> Exit</span></div></div>
+      </div>
+    </section>
+    <aside class="sidebar">
+      <div class="side-card"><h3>CHOOSE DIFFICULTY</h3><p>Harder modes add more rings, blockers, and tighter exits.</p>
+      <div class="difficulty-list"><button class="difficulty active" data-diff="easy"><span class="diff-icon">🟢</span><span><b>Easy</b><small>2 rings · wide paths</small></span><span class="check">✓</span></button><button class="difficulty" data-diff="normal"><span class="diff-icon">🔵</span><span><b>Normal</b><small>3 rings · more turns</small></span><span class="check">✓</span></button><button class="difficulty" data-diff="hard"><span class="diff-icon">🟣</span><span><b>Hard</b><small>4 rings · moving hazards</small></span><span class="check">✓</span></button><button class="difficulty" data-diff="expert"><span class="diff-icon">🔴</span><span><b>Expert</b><small>5 rings · narrow routes</small></span><span class="check">✓</span></button></div>
+      </div>
+      <div class="side-card progress-card"><div class="card-heading"><h3>MAZE PROGRESS</h3><b id="progressText">0%</b></div><div class="progress-track"><div id="progressBar"></div></div><div class="progress-foot"><span id="obstacleCount">2 obstacle rings</span><span id="checkpointText">Start → Exit</span></div></div>
+      <div class="side-card tip-card"><div class="tip-icon">✧</div><div><b>Rolling tip</b><p>Follow the gaps in each ring. You can reset your ball anytime without restarting the level.</p></div></div>
+    </aside>
+  </main>
+  <footer>SPHERE ROLL <span>•</span> A 3D maze challenge</footer>
+</div>
+<script src="script.js"></script>
+</body></html>

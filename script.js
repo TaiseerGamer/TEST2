@@ -1,0 +1,48 @@
+(() => {
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const settings={easy:{rings:2,gap:.72,speed:1.05,blockers:0},normal:{rings:3,gap:.52,speed:1.0,blockers:1},hard:{rings:4,gap:.38,speed:.94,blockers:3},expert:{rings:5,gap:.28,speed:.88,blockers:5}};
+let difficulty='easy',level=1,falls=0,elapsed=0,last=performance.now(),running=true,tiltX=0,tiltZ=0,keys={},buttons={},ballVel=new THREE.Vector2(),ballPos=new THREE.Vector2(0,0),mazeGroup,ball,scene,camera,renderer,clock=new THREE.Clock(),walls=[],blockers=[],goal,goalAngle=0,goalRadius=0,progress=0,toastTimer;
+const R=4.2, ballR=.15;
+scene=new THREE.Scene();scene.background=new THREE.Color(0x0c1425);scene.fog=new THREE.Fog(0x0c1425,10,24);
+camera=new THREE.PerspectiveCamera(42,1,.1,100);camera.position.set(0,7.8,10.8);camera.lookAt(0,0,0);
+renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;$('.canvas-wrap').appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xbfdcff,0x15203b,2.0));const keyLight=new THREE.DirectionalLight(0xffffff,3.2);keyLight.position.set(-4,8,5);keyLight.castShadow=true;scene.add(keyLight);const rim=new THREE.PointLight(0x37dcca,28,18);rim.position.set(4,3,-4);scene.add(rim);
+const floor=new THREE.Mesh(new THREE.CircleGeometry(20,80),new THREE.MeshStandardMaterial({color:0x0c1425,roughness:.85}));floor.rotation.x=-Math.PI/2;floor.position.y=-1.2;scene.add(floor);
+function mat(color,metalness=.25,roughness=.4,emissive=0){return new THREE.MeshStandardMaterial({color,metalness,roughness,emissive,emissiveIntensity:emissive?1.1:0})}
+const wallMat=mat(0x617bff,.55,.28,0x182b85), baseMat=mat(0x243755,.4,.5), goldMat=mat(0xffc76a,.45,.25,0x8e4a05), ballMat=mat(0x4fffe0,.3,.2,0x087f78);
+function makeMaze(){
+if(mazeGroup)scene.remove(mazeGroup);mazeGroup=new THREE.Group();scene.add(mazeGroup);walls=[];blockers=[];
+const cfg=settings[difficulty], rings=cfg.rings+(level>1?Math.min(2,Math.floor((level-1)/2)):0), gap=cfg.gap;
+const shell=new THREE.Mesh(new THREE.SphereGeometry(R,64,40,0,Math.PI*2,0,Math.PI*.5),new THREE.MeshStandardMaterial({color:0x1b3150,metalness:.3,roughness:.5,transparent:true,opacity:.18,side:THREE.DoubleSide,wireframe:false}));shell.scale.y=.8;shell.position.y=-.2;mazeGroup.add(shell);
+const disc=new THREE.Mesh(new THREE.CircleGeometry(R,96),baseMat);disc.rotation.x=-Math.PI/2;disc.position.y=-.05;mazeGroup.add(disc);
+const rimMesh=new THREE.Mesh(new THREE.TorusGeometry(R,.14,10,100),mat(0x3b5478,.6,.3));rimMesh.rotation.x=Math.PI/2;rimMesh.position.y=.02;mazeGroup.add(rimMesh);
+for(let i=1;i<=rings;i++){
+const radius=R*(i/(rings+1));const segments=90;const holeCenter=(i%2===0?Math.PI*.5:Math.PI*1.5)+(level-1)*.19;
+const gapWidth=gap*(1+(i===1?.18:0));for(let j=0;j<segments;j++){let a=j/segments*Math.PI*2;let diff=Math.atan2(Math.sin(a-holeCenter),Math.cos(a-holeCenter));if(Math.abs(diff)<gapWidth/2)continue;
+const x=Math.cos(a)*radius,z=Math.sin(a)*radius;const block=new THREE.Mesh(new THREE.BoxGeometry(.21,.25,.19),wallMat);block.position.set(x,.14,z);block.rotation.y=-a;block.castShadow=true;block.receiveShadow=true;mazeGroup.add(block);walls.push({x,z,r:.17,mesh:block});}
+const ringGlow=new THREE.Mesh(new THREE.TorusGeometry(radius,.018,5,100),mat(0x38517a,.2,.5,0x152b52));ringGlow.rotation.x=Math.PI/2;ringGlow.position.y=.025;mazeGroup.add(ringGlow);
+}
+const startAngle=-Math.PI/2;ballPos.set(Math.cos(startAngle)*(R-.45),Math.sin(startAngle)*(R-.45));
+goalAngle=Math.PI/2+(level-1)*.16;goalRadius=R-.27;
+goal=new THREE.Group();const hoop=new THREE.Mesh(new THREE.TorusGeometry(.28,.065,12,36),goldMat);hoop.rotation.x=Math.PI/2;hoop.position.y=.2;goal.add(hoop);const glow=new THREE.PointLight(0xffbd59,2,2.5);glow.position.y=.5;goal.add(glow);goal.position.set(Math.cos(goalAngle)*goalRadius,.08,Math.sin(goalAngle)*goalRadius);mazeGroup.add(goal);
+for(let i=0;i<cfg.blockers+Math.floor((level-1)/2);i++){let radius=R*(.36+(i%3)*.14);let angle=i*2.4+.4;const pivot=new THREE.Group();pivot.position.set(Math.cos(angle)*radius,.18,Math.sin(angle)*radius);const hazard=new THREE.Mesh(new THREE.BoxGeometry(.85,.16,.18),mat(0xff637c,.4,.3,0x68132b));hazard.castShadow=true;pivot.add(hazard);mazeGroup.add(pivot);blockers.push({pivot,radius,angle,speed:(i%2?-.55:.48)*(1+i*.09),mesh:hazard});}
+if(ball)scene.remove(ball);ball=new THREE.Mesh(new THREE.SphereGeometry(ballR,24,18),ballMat);ball.castShadow=true;ball.receiveShadow=true;mazeGroup.add(ball);resetBall(false);$('.obstacleCount').textContent='';
+$('#obstacleCount').textContent=`${rings} obstacle rings`;$('#difficultyBadge').textContent=difficulty.toUpperCase();$('#progressText').textContent='0%';$('#progressBar').style.width='0%';$('#levelNum').textContent=String(level).padStart(2,'0');
+}
+function resetBall(count=true){if(count)falls++;$('#falls').textContent=falls;const a=-Math.PI/2;ballPos.set(Math.cos(a)*(R-.42),Math.sin(a)*(R-.42));ballVel.set(0,0);tiltX=tiltZ=0;updateBall();if(count)showToast('Ball reset — try a different angle');}
+function updateBall(){ball.position.set(ballPos.x,.2,ballPos.y);}
+function showToast(msg){$('#toast').textContent=msg;$('#toast').style.opacity=1;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').style.opacity=0,1500);}
+function resize(){const wrap=$('.canvas-wrap');const w=wrap.clientWidth,h=wrap.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+function collide(nx,nz){const cfg=settings[difficulty],rings=cfg.rings+(level>1?Math.min(2,Math.floor((level-1)/2)):0);for(let w of walls){const dx=nx-w.x,dz=nz-w.z;if(dx*dx+dz*dz<(ballR+w.r)**2)return true;}for(const b of blockers){const dx=nx-b.pivot.position.x,dz=nz-b.pivot.position.z;if(Math.abs(dx)<.48&&Math.abs(dz)<.28)return true;}if(Math.hypot(nx,nz)>R-.18)return true;return false;}
+function frame(now){requestAnimationFrame(frame);const dt=Math.min((now-last)/1000,.04);last=now;if(running){elapsed+=dt;let x=(keys.ArrowRight||keys.d||buttons.right?1:0)-(keys.ArrowLeft||keys.a||buttons.left?1:0);let z=(keys.ArrowDown||keys.s||buttons.down?1:0)-(keys.ArrowUp||keys.w||buttons.up?1:0);const cfg=settings[difficulty];ballVel.x+=x*5.4*cfg.speed*dt;ballVel.y+=z*5.4*cfg.speed*dt;ballVel.multiplyScalar(Math.pow(.985,dt*60));ballVel.clampLength(0,3.2);let nx=ballPos.x+ballVel.x*dt,nz=ballPos.y+ballVel.y*dt;if(collide(nx,nz)){if(!collide(nx,ballPos.y)){ballPos.x=nx;ballVel.y*=-.25;}else if(!collide(ballPos.x,nz)){ballPos.y=nz;ballVel.x*=-.25;}else{ballVel.multiplyScalar(-.25);}}else ballPos.set(nx,nz);
+for(const b of blockers){b.angle+=b.speed*dt;b.pivot.position.set(Math.cos(b.angle)*b.radius,.18,Math.sin(b.angle)*b.radius);b.pivot.rotation.y=-b.angle;}
+updateBall();const d=Math.hypot(ballPos.x-goal.position.x,ballPos.y-goal.position.z);if(d<.38){running=false;$('#overlayTitle').textContent='Maze escaped!';$('#overlayText').textContent=`You cleared level ${level} in ${formatTime(elapsed)}. The next maze will be tougher.`;$('#nextBtn').textContent='NEXT LEVEL →';$('#overlay').classList.add('show');}
+progress=Math.max(progress,Math.min(100,Math.round((R-Math.hypot(ballPos.x,ballPos.y))/(R*1.6)*100+8)));$('#progressText').textContent=progress+'%';$('#progressBar').style.width=progress+'%';}
+$('#timer').textContent=formatTime(elapsed);const tiltInputX=(keys.ArrowDown||keys.s||buttons.down?1:0)-(keys.ArrowUp||keys.w||buttons.up?1:0);const tiltInputZ=(keys.ArrowRight||keys.d||buttons.right?1:0)-(keys.ArrowLeft||keys.a||buttons.left?1:0);const targetX=0.12+tiltInputX*.13,targetZ=tiltInputZ*.13;mazeGroup.rotation.x+=(targetX-mazeGroup.rotation.x)*.08;mazeGroup.rotation.z+=(targetZ-mazeGroup.rotation.z)*.08;renderer.render(scene,camera);}
+function formatTime(t){let s=Math.floor(t);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+$$('[data-dir]').forEach(btn=>{const d=btn.dataset.dir;btn.addEventListener('pointerdown',e=>{e.preventDefault();buttons[d]=true;btn.setPointerCapture(e.pointerId)});['pointerup','pointercancel','lostpointercapture'].forEach(ev=>btn.addEventListener(ev,()=>buttons[d]=false));});
+window.addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();keys[e.key]=true;if(e.key===' ')resetBall();});window.addEventListener('keyup',e=>keys[e.key]=false);window.addEventListener('blur',()=>{keys={};buttons={};});
+$('#resetBtn').addEventListener('click',()=>resetBall());$$('.difficulty').forEach(btn=>btn.addEventListener('click',()=>{difficulty=btn.dataset.diff;level=1;falls=0;elapsed=0;progress=0;running=true;$('#falls').textContent='0';$('#overlay').classList.remove('show');$$('.difficulty').forEach(b=>b.classList.toggle('active',b===btn));makeMaze();showToast(difficulty.toUpperCase()+' maze selected');}));
+$('#nextBtn').addEventListener('click',()=>{level++;elapsed=0;progress=0;running=true;$('#overlay').classList.remove('show');makeMaze();showToast('Level '+level+' — new obstacles added');});
+window.addEventListener('resize',resize);makeMaze();resize();$('#loading').style.display='none';requestAnimationFrame(frame);
+})();
